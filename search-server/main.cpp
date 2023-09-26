@@ -128,14 +128,17 @@ private:
         return query_words;
     }
 
+    double IDFCount(const string& plus_word) const {
+        return log(static_cast<double>(DOCUMENT_COUNT) / static_cast<double>(word_to_document_freqs_.at(plus_word).size()));
+    }
+
     vector<Document> FindAllDocuments(const Query& query_words) const {
         map<int, double> matched_documents; //<doc_id, counted relevance>
 
         for (const string& plus_word : query_words.plus) {
             if (word_to_document_freqs_.count(plus_word) > 0) {
-                double idf_count = log((double)DOCUMENT_COUNT / word_to_document_freqs_.at(plus_word).size());
                 for (const auto& [id, tf] : word_to_document_freqs_.at(plus_word)) {
-                    matched_documents[id] += tf * idf_count;
+                    matched_documents[id] += tf * IDFCount(plus_word);
                 }
             }
         }
@@ -152,7 +155,7 @@ private:
 
         vector<Document> matched_docs_vector;
         for (const auto& [id, relevance] : matched_documents) {
-            vector_matched.push_back({ id, relevance });
+            matched_docs_vector.push_back({ id, relevance });
         }
 
         return matched_docs_vector;
