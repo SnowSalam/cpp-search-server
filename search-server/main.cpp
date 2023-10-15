@@ -2,6 +2,7 @@
 #include <cmath>
 #include <iostream>
 #include <map>
+#include <numeric>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -11,6 +12,7 @@
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
+const double EPSILON = 1e-6;
 
 string ReadLine() {
     string s;
@@ -36,6 +38,9 @@ vector<string> SplitIntoWords(const string& text) {
             }
         }
         else {
+            if (c >= '\0' && c < ' ') {
+                throw invalid_argument("Words contain special symbols");
+            }
             word += c;
         }
     }
@@ -65,6 +70,9 @@ set<string> MakeUniqueNonEmptyStrings(const StringContainer& strings) {
     set<string> non_empty_strings;
     for (const string& str : strings) {
         if (!str.empty()) {
+            if (any_of(str.begin(), str.end(), [](char c) { return c >= '\0' && c < ' '; })) {
+                throw invalid_argument("Words contain special symbols");
+            }
             non_empty_strings.insert(str);
         }
     }
@@ -81,33 +89,15 @@ enum class DocumentStatus {
 class SearchServer {
 public:
     explicit SearchServer(const vector<string>& stop_words)
-        : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
-        for (const string& word : stop_words_) {
-            if (!IsClearOfSpecialSymbols(word)) {
-                throw invalid_argument("Stop-words contain special symbols");
-            }
-        }
-    }
+        : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {}
 
     explicit SearchServer(const set<string>& stop_words)
-        : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
-        for (const string& word : stop_words_) {
-            if (!IsClearOfSpecialSymbols(word)) {
-                throw invalid_argument("Stop-words contain special symbols");
-            }
-        }
-    }
+        : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {}
 
     explicit SearchServer(const string& stop_words_text)
         : SearchServer(
             SplitIntoWords(stop_words_text))  // Invoke delegating constructor from string container
-    {
-        for (const string& word : stop_words_) {
-            if (!IsClearOfSpecialSymbols(word)) {
-                throw invalid_argument("Stop-words contain special symbols");
-            }
-        }
-    }
+    {}
 
     void AddDocument(int document_id, const string& document, DocumentStatus status, const vector<int>& ratings) {
 
@@ -122,12 +112,6 @@ public:
         }
 
         const vector<string> words = SplitIntoWordsNoStop(document);
-        for (const string& word : words) {
-            if (!IsClearOfSpecialSymbols(word)) {
-                throw invalid_argument("The document was not added because it contains special characters");
-            }
-        }
-
         const double inv_word_count = 1.0 / words.size();
         for (const string& word : words) {
             word_to_document_freqs_[word][document_id] += inv_word_count;
@@ -136,27 +120,21 @@ public:
     }
 
     int GetDocumentId(int index) {
-        if (index > documents_ids_.size() || index < 0) {
-            throw out_of_range("Index is out of range");
-        }
-        return documents_ids_[index];
+        return documents_ids_.at(index);
     }
 
     template <typename DocumentPredicate>
     vector<Document> FindTopDocuments(const string& raw_query, DocumentPredicate document_predicate) const {
         const Query query = ParseQuery(raw_query);
-        CheckQueryCorrect(query);
 
         auto matched_documents = FindAllDocuments(query, document_predicate);
 
         sort(matched_documents.begin(), matched_documents.end(),
             [](const Document& lhs, const Document& rhs) {
-                if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+                if (abs(lhs.relevance - rhs.relevance) < EPSILON) {
                     return lhs.rating > rhs.rating;
                 }
-                else {
-                    return lhs.relevance > rhs.relevance;
-                }
+                return lhs.relevance > rhs.relevance;
             });
         if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
             matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
@@ -183,7 +161,6 @@ public:
     tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {
 
         const Query query = ParseQuery(raw_query);
-        CheckQueryCorrect(query);
 
         vector<string> matched_words;
         for (const string& word : query.plus_words) {
@@ -228,9 +205,6 @@ private:
                 words.push_back(word);
             }
         }
-        if (words.empty()) {
-            return {};
-        }
         return words;
     }
 
@@ -238,10 +212,7 @@ private:
         if (ratings.empty()) {
             return 0;
         }
-        int rating_sum = 0;
-        for (const int rating : ratings) {
-            rating_sum += rating;
-        }
+        int rating_sum = accumulate(ratings.begin(), ratings.end(), 0);
         return rating_sum / static_cast<int>(ratings.size());
     }
 
@@ -257,6 +228,12 @@ private:
         if (text[0] == '-') {
             is_minus = true;
             text = text.substr(1);
+        }
+        if (text[0] == '-') {
+            throw invalid_argument("Word contains an extra-minus");
+        }
+        if (is_minus && text.empty()) {
+            throw invalid_argument("No word after minus");
         }
         return { text, is_minus, IsStopWord(text) };
     }
@@ -280,25 +257,6 @@ private:
             }
         }
         return query;
-    }
-
-    static bool IsClearOfSpecialSymbols(const string& word) {
-        return none_of(word.begin(), word.end(), [](char c) {
-            return c >= '\0' && c < ' ';
-            });
-    }
-
-    void CheckQueryCorrect(const Query& query) const {
-        for (const string& word : query.plus_words) {
-            if (!IsClearOfSpecialSymbols(word) || word[word.size() - 1] == '-' || query.plus_words.empty()) {
-                throw invalid_argument("Invalid words: check plus_words");
-            }
-        }
-        for (const string& word : query.minus_words) {
-            if (!IsClearOfSpecialSymbols(word) || (word[0] == '-') || word.empty() || word[word.size() - 1] == '-') {
-                throw invalid_argument("Invalid words: check minus_words");
-            }
-        }
     }
 
     // Existence required
@@ -341,7 +299,7 @@ private:
     }
 };
 
-// ==================== для примера =========================
+// ==================== Для примера =========================
 
 void PrintDocument(const Document& document) {
     cout << "{ "s
