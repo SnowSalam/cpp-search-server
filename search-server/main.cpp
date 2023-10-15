@@ -38,9 +38,6 @@ vector<string> SplitIntoWords(const string& text) {
             }
         }
         else {
-            if (c >= '\0' && c < ' ') {
-                throw invalid_argument("Words contain special symbols");
-            }
             word += c;
         }
     }
@@ -70,9 +67,6 @@ set<string> MakeUniqueNonEmptyStrings(const StringContainer& strings) {
     set<string> non_empty_strings;
     for (const string& str : strings) {
         if (!str.empty()) {
-            if (any_of(str.begin(), str.end(), [](char c) { return c >= '\0' && c < ' '; })) {
-                throw invalid_argument("Words contain special symbols");
-            }
             non_empty_strings.insert(str);
         }
     }
@@ -89,10 +83,22 @@ enum class DocumentStatus {
 class SearchServer {
 public:
     explicit SearchServer(const vector<string>& stop_words)
-        : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {}
+        : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
+        for (const string& word : stop_words_) {
+            if (any_of(word.begin(), word.end(), [](char c) { return c >= '\0' && c < ' '; })) {
+                throw invalid_argument("Words contain special symbols");
+            }
+        }
+    }
 
     explicit SearchServer(const set<string>& stop_words)
-        : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {}
+        : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
+        for (const string& word : stop_words_) {
+            if (any_of(word.begin(), word.end(), [](char c) { return c >= '\0' && c < ' '; })) {
+                throw invalid_argument("Words contain special symbols");
+            }
+        }
+    }
 
     explicit SearchServer(const string& stop_words_text)
         : SearchServer(
@@ -112,6 +118,12 @@ public:
         }
 
         const vector<string> words = SplitIntoWordsNoStop(document);
+        for (const string& word : words) {
+            if (any_of(word.begin(), word.end(), [](char c) { return c >= '\0' && c < ' '; })) {
+                throw invalid_argument("Words contain special symbols");
+            }
+        }
+
         const double inv_word_count = 1.0 / words.size();
         for (const string& word : words) {
             word_to_document_freqs_[word][document_id] += inv_word_count;
@@ -224,7 +236,9 @@ private:
 
     QueryWord ParseQueryWord(string text) const {
         bool is_minus = false;
-        // Word shouldn't be empty
+        if (any_of(text.begin(), text.end(), [](char c) { return c >= '\0' && c < ' '; })) {
+            throw invalid_argument("Words contain special symbols");
+        }
         if (text[0] == '-') {
             is_minus = true;
             text = text.substr(1);
