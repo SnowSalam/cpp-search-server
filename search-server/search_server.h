@@ -4,7 +4,6 @@
 #include "string_processing.h"
 
 #include <algorithm>
-#include <cmath>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -20,14 +19,16 @@ const double EPSILON = 1e-6;
 
 class SearchServer {
 public:
+
     template <typename StringContainer>
-    explicit SearchServer(const StringContainer& stop_words)
+    explicit SearchServer(const StringContainer& stop_words) // what did you mean? how can I move the template out of the constructor?
         : stop_words_(MakeUniqueNonEmptyStrings(stop_words))
     {
         if (!all_of(stop_words_.begin(), stop_words_.end(), IsValidWord)) {
             throw std::invalid_argument("Some of stop words are invalid");
         }
     }
+
     explicit SearchServer(const string& stop_words_text)
         : SearchServer(SplitIntoWords(stop_words_text))  
     {}
