@@ -18,9 +18,8 @@ int RequestQueue::GetNoResultRequests() const {
     return no_results_requests_;
 }
 
-void RequestQueue::AddRequest(int results_num) { // github doesn't know russian, shows ugly symbols
-    ++current_time_;                             // code from trainer, https://pastebin.com/m7YHGX9e
-                                                 // like it more than mine
+void RequestQueue::AddRequest(int results_num) {
+    ++current_time_;
     while (!requests_.empty() && min_in_day_ <= current_time_ - requests_.front().timestamp) {
         if (0 == requests_.front().results) {
             --no_results_requests_;
